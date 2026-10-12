@@ -43,6 +43,12 @@ fi
 echo "Waiting for all cluster nodes to reach Ready state..."
 kubectl wait --for=condition=Ready nodes --all --timeout=120s
 
+if command -v k3d &> /dev/null; then
+  echo "Configuring Traefik Ingress Controller for High Availability (2 replicas)..."
+  kubectl wait --namespace kube-system --for=condition=available deployment/traefik --timeout=120s
+  kubectl scale deployment traefik -n kube-system --replicas=2
+fi
+
 echo "=== Cluster Nodes ==="
 kubectl get nodes -o wide
 

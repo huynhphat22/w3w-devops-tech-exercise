@@ -49,6 +49,12 @@ if (Get-Command k3d -ErrorAction SilentlyContinue) {
 Write-Host "Waiting for all cluster nodes to reach Ready state..." -ForegroundColor Cyan
 kubectl wait --for=condition=Ready nodes --all --timeout=120s
 
+if (Get-Command k3d -ErrorAction SilentlyContinue) {
+    Write-Host "Configuring Traefik Ingress Controller for High Availability (2 replicas)..." -ForegroundColor Cyan
+    kubectl wait --namespace kube-system --for=condition=available deployment/traefik --timeout=120s
+    kubectl scale deployment traefik -n kube-system --replicas=2
+}
+
 Write-Host "`n=== Cluster Nodes ===" -ForegroundColor Green
 kubectl get nodes -o wide
 
