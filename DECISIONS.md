@@ -43,8 +43,35 @@ This document captures the technical reasoning, trade-offs, rejected alternative
 
 ---
 
-## 2. Cluster & Orchestration Assumptions
+## 2. Local Kubernetes Cluster Architecture (Core Task 2)
+
+### Decisions Made
+
+1. **Cluster Orchestrator: `k3d` as Primary with `kind` as Fallback**
+   - **Choice:** Declarative configuration files (`cluster/k3d.yaml` and `cluster/kind.yaml`) supported by idempotent automation scripts (`up.sh`, `up.ps1`, `down.sh`, `down.ps1`).
+   - **Rationale:** 
+     - *Speed & Resource Efficiency:* `k3d` runs lightweight k3s nodes inside Docker containers, spinning up a 3-node cluster in under 15 seconds with negligible memory footprint compared to full `kubeadm`-based distributions.
+     - *Built-in Ingress Routing:* `k3d` includes a dedicated host-level load balancer container (`k3d-proxy`) routing traffic to Traefik on port 80/443 out-of-the-box, eliminating the need for MetalLB or tunnel daemons to expose workloads outside the cluster.
+     - *Image Sideloading:* Supports direct image injection (`k3d image import greeter:test -c w3w-cluster`) without requiring an external container registry or internet connectivity.
+   - **Considered and Rejected:**
+     - *`minikube`:* Rejected due to heavier resource overhead, slower multi-node provisioning, and the requirement for external tunnel daemons (`minikube tunnel`) to expose ingress ports on non-Linux hosts.
+     - *Imperative CLI commands:* Rejected. Creating clusters via raw CLI flags (`k3d cluster create ... --agents 2 ...`) makes configuration drift hard to track. A checked-in declarative YAML spec (`k3d.yaml` / `kind.yaml`) guarantees version-controlled reproducibility.
+   - **What we're least sure about & what would change our mind:**
+     - While `k3d`'s default Traefik ingress is convenient, some organizations strictly standardize on Ingress-NGINX. If the assessment expects Ingress-NGINX specifically, we can disable Traefik via `extraArgs: [--disable=traefik]` and install the NGINX ingress controller. Our fallback `kind.yaml` includes the Ingress-NGINX controller deployment.
+
+2. **Node Topology: 1 Control Plane + 2 Dedicated Worker Nodes**
+   - **Choice:** 1 server (`k3d-w3w-cluster-server-0`) and 2 worker agents (`agent-0`, `agent-1`).
+   - **Rationale:** Strict fulfillment of the requirement ("at least two worker nodes"). Worker workloads (Core Task 3) can be spread across `agent-0` and `agent-1` using `podAntiAffinity` or `topologySpreadConstraints`. This topology enables node-drain chaos testing (Extension D) where one worker node is cordon/drained while traffic continuously flows to the surviving worker node without impacting the control plane.
+
+3. **Cross-Platform Automation (Bash + PowerShell)**
+   - **Choice:** Maintained dual automation scripts (`up.sh` and `up.ps1`).
+   - **Rationale:** Assessors may evaluate the exercise on macOS, Linux, or Windows. Providing idiomatic PowerShell and POSIX bash scripts removes host friction.
+
+---
+
+## 3. Operational & Orchestration Assumptions
 
 ### Ambiguities & Assumptions
 - **Configuration Mechanism:** The application reads configuration exclusively from environment variables (`GREETING_NAME`, `PORT`, `VERSION`, `WARMUP_SECONDS`, `SHUTDOWN_DELAY_SECONDS`, `DRAIN_TIMEOUT_SECONDS`). Environment variables in Kubernetes will be passed via `ConfigMap` and Deployment specs, allowing per-environment customization without image rebuilds.
 - **Grace Period Sizing:** Because the application enforces a 10s shutdown delay (`SHUTDOWN_DELAY_SECONDS`) plus up to a 20s drain period (`DRAIN_TIMEOUT_SECONDS`), Kubernetes `terminationGracePeriodSeconds` must be set to $\ge 35\text{s}$ (e.g. 45s) to prevent the kubelet from prematurely sending `SIGKILL`.
+
