@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-greeter-config
+  labels:
+    app.kubernetes.io/name: greeter
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  GREETING_NAME: {{ .Values.greetingName | quote }}
+  PORT: {{ .Values.config.port | quote }}
+  VERSION: {{ .Values.config.version | quote }}
+  WARMUP_SECONDS: {{ .Values.config.warmupSeconds | quote }}
+  SHUTDOWN_DELAY_SECONDS: {{ .Values.config.shutdownDelaySeconds | quote }}
+  DRAIN_TIMEOUT_SECONDS: {{ .Values.config.drainTimeoutSeconds | quote }}

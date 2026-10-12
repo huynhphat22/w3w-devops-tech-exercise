@@ -1,0 +1,59 @@
+# Default values for greeter chart.
+# Every line here is intentional and justified.
+
+# Greeting name injected into the service.
+# Required by the Go application; exits non-zero if missing.
+greetingName: "Candidate"
+
+# Replica count: defaults to 2 to ensure multi-node distribution across worker nodes.
+replicaCount: 2
+
+image:
+  repository: "greeter"
+  tag: "test"
+  pullPolicy: "IfNotPresent"
+
+# Operational configuration mapped to application environment variables.
+config:
+  port: 8080
+  version: "1.0.0"
+  warmupSeconds: 30
+  shutdownDelaySeconds: 10
+  drainTimeoutSeconds: 20
+
+# Kubernetes Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+# Ingress configuration to expose the service outside the cluster
+ingress:
+  enabled: true
+  className: "" # Empty leaves it to the cluster default IngressClass (e.g. Traefik on k3d)
+  host: ""      # If empty, matches any host (e.g., http://localhost)
+  path: "/"
+  pathType: "Prefix"
+  annotations: {}
+
+# Compute resource guarantees and limits
+resources:
+  requests:
+    cpu: "20m"
+    memory: "32Mi"
+  limits:
+    cpu: "200m"
+    memory: "64Mi"
+
+# Pod Disruption Budget: guarantees at least 1 replica remains available during drains or rollouts
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Topology spread constraints: spreads replicas evenly across physical/virtual nodes
+# to guarantee survival across single worker node failures.
+topologySpread:
+  enabled: true
+  maxSkew: 1
+  topologyKey: "kubernetes.io/hostname"
+  whenUnsatisfiable: "ScheduleAnyway"
