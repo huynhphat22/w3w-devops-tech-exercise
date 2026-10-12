@@ -113,10 +113,33 @@ This document captures the technical reasoning, trade-offs, rejected alternative
 
 ---
 
-## 4. Operational & Orchestration Assumptions
+## 4. Multi-Environment Deployment with Terraform (Core Task 4)
+
+### Decisions Made
+
+1. **Multi-Environment Architecture: Reusable Module with Map Iteration**
+   - **Choice:** Created a reusable child module (`terraform/modules/greeter/`) instantiated via `for_each = var.environments` in the root configuration, supplemented by standalone var-files (`dev.tfvars` and `prod.tfvars`).
+   - **Rationale:** 
+     - *Zero Duplication:* Directly satisfies the brief's constraint (*"without duplicating the whole configuration"*). The underlying resources (`kubernetes_namespace`, `helm_release`) and Helm parameter mapping exist in exactly one place.
+     - *Multi-Tenant Coexistence:* Deploys `dev` (2 replicas, `"Dev-Engineer"`, namespace `dev`) and `prod` (3 replicas, `"Prod-Operations"`, namespace `prod`) simultaneously into isolated namespaces with non-conflicting Ingress host headers (`dev.greeter.local` vs. `prod.greeter.local`).
+   - **Considered and Rejected:**
+     - *Directory Duplication (`environments/dev/` vs `environments/prod/`):* Rejected. Copy-pasting HCL code across folders causes configuration drift whenever variables, provider versions, or lifecycle hooks are updated.
+     - *Terraform Workspaces:* Considered. While workspaces share configuration, local workspace switching is state-dependent (`terraform workspace select`) and prone to human error (accidentally applying dev changes to prod). Explicit namespaces and maps make environmental boundaries declarative and visible in a single plan.
+     - *Terragrunt:* Industry standard for DRY multi-environment Terraform, but rejected to avoid introducing external binary requirements beyond standard `terraform`.
+   - **What we're least sure about & what would change our mind:**
+     - In large-scale enterprise environments, using Terraform for application-layer deployments is often considered an anti-pattern: it bloats the Terraform state file, slows down `plan` execution, and entangles cluster infrastructure lifecycle with application deployment velocity. If this service were part of a microservice ecosystem, we would limit Terraform to provisioning cluster infrastructure (namespaces, RBAC, ingress controllers) and delegate application deployments to a GitOps operator like Argo CD or Flux.
+
+2. **Provider Integration: `hashicorp/helm` with `yamlencode`**
+   - **Choice:** Used `helm_release` with `values = [yamlencode({ ... })]`.
+   - **Rationale:** Strongly typed HCL objects are converted into YAML values dynamically. This avoids the fragility of dozens of repetitive `set` blocks and ensures that unset values naturally fall back to the Helm chart's hardened defaults.
+
+---
+
+## 5. Operational & Orchestration Assumptions
 
 ### Ambiguities & Assumptions
 - **Configuration Mechanism:** The application reads configuration exclusively from environment variables (`GREETING_NAME`, `PORT`, `VERSION`, `WARMUP_SECONDS`, `SHUTDOWN_DELAY_SECONDS`, `DRAIN_TIMEOUT_SECONDS`). Environment variables in Kubernetes are passed via `ConfigMap` and Deployment specs, allowing per-environment customization without image rebuilds.
 - **Grace Period Sizing:** Because the application enforces a 10s shutdown delay (`SHUTDOWN_DELAY_SECONDS`) plus up to a 20s drain period (`DRAIN_TIMEOUT_SECONDS`), Kubernetes `terminationGracePeriodSeconds` must be set to $\ge 35\text{s}$ (e.g. 45s) to prevent the kubelet from prematurely sending `SIGKILL`.
+
 
 
