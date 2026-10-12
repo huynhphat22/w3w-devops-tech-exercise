@@ -13,6 +13,10 @@ if command -v k3d &> /dev/null; then
   else
     k3d cluster create --config "${SCRIPT_DIR}/k3d.yaml"
   fi
+  if docker image inspect greeter:test &> /dev/null; then
+    echo "Importing local image 'greeter:test' into ${CLUSTER_NAME}..."
+    k3d image import greeter:test -c "${CLUSTER_NAME}"
+  fi
 elif command -v kind &> /dev/null; then
   echo "k3d not detected; using kind to create cluster..."
   if kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
@@ -25,6 +29,10 @@ elif command -v kind &> /dev/null; then
       --for=condition=ready pod \
       --selector=app.kubernetes.io/component=controller \
       --timeout=120s
+  fi
+  if docker image inspect greeter:test &> /dev/null; then
+    echo "Importing local image 'greeter:test' into ${CLUSTER_NAME}..."
+    kind load docker-image greeter:test --name "${CLUSTER_NAME}"
   fi
 else
   echo "Error: Neither 'k3d' nor 'kind' found in PATH." >&2

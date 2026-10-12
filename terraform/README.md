@@ -61,10 +61,11 @@ terraform apply -var-file="environments/prod.tfvars"
 kubectl get pods -n dev
 kubectl get pods -n prod
 
-# Test external access via host headers
-curl -H "Host: dev.greeter.local" http://localhost/
+# Test external access via host headers (using port 8088 configured in cluster/k3d.yaml)
+curl -H "Host: dev.greeter.local" http://localhost:8088/
 # Output: Hello Dev-Engineer, welcome to the what3words platform.
 
-curl -H "Host: prod.greeter.local" http://localhost/
+curl -H "Host: prod.greeter.local" http://localhost:8088/
 # Output: Hello Prod-Operations, welcome to the what3words platform.
 ```
+
