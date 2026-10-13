@@ -167,29 +167,7 @@ kubectl uncordon k3d-w3w-cluster-agent-0
 
 ---
 
-## Step 7: CI Pipeline & Local Quality Gates (Extension A)
-
-The GitHub Actions workflow lives in [`.github/workflows/ci.yml`](.github/workflows/ci.yml). To run the local equivalents of the CI quality gates:
-
-```bash
-# 1. Helm Lint & Template Validation:
-helm lint charts/greeter
-helm template greeter charts/greeter --values charts/greeter/values.yaml
-
-# 2. Terraform Format & Validation:
-cd terraform
-terraform fmt -check
-terraform validate
-cd ..
-
-# 3. Docker Build & Image Size Budget Check (< 20 MB):
-docker build -t greeter:ci-test .
-docker image inspect greeter:ci-test --format '{{.Size}}'
-```
-
----
-
-## Step 8: Teardown & Cleanup
+## Step 7: Teardown & Cleanup
 
 To destroy all deployed resources and tear down the local cluster:
 
