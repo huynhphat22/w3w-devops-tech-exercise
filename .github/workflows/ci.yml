@@ -1,0 +1,143 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main, solution]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-app:
+    name: Test Application (Go)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          check-latest: false
+
+      - name: Verify Go formatting
+        run: |
+          UNFORMATTED=$(gofmt -l app/)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "Error: The following Go files are not properly formatted:"
+            echo "$UNFORMATTED"
+            exit 1
+          fi
+
+      - name: Run go vet
+        working-directory: app
+        run: go vet ./...
+
+      - name: Run unit tests with race detector and coverage
+        working-directory: app
+        run: go test -v -race -covermode=atomic -coverprofile=coverage.txt ./...
+
+  lint-helm:
+    name: Lint Helm Chart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.16.2'
+
+      - name: Run helm lint
+        run: helm lint charts/greeter
+
+      - name: Verify template rendering (default values)
+        run: helm template greeter charts/greeter --values charts/greeter/values.yaml > /dev/null
+
+  validate-terraform:
+    name: Validate Terraform
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.9.5'
+
+      - name: Check Terraform formatting
+        working-directory: terraform
+        run: terraform fmt -check -diff
+
+      - name: Initialize Terraform
+        working-directory: terraform
+        run: terraform init -backend=false
+
+      - name: Validate Terraform configuration
+        working-directory: terraform
+        run: terraform validate
+
+  build-container:
+    name: Build & Audit Container
+    runs-on: ubuntu-latest
+    needs: [test-app, lint-helm, validate-terraform]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and load image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          tags: greeter:${{ github.sha }},greeter:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify image size budget (< 20MB)
+        run: |
+          SIZE_BYTES=$(docker image inspect greeter:${{ github.sha }} --format '{{.Size}}')
+          SIZE_MB=$((SIZE_BYTES / 1024 / 1024))
+          echo "Built image size: ${SIZE_MB} MB (${SIZE_BYTES} bytes)"
+          if [ "${SIZE_MB}" -ge 20 ]; then
+            echo "Error: Container image exceeds the 20 MB size budget!"
+            exit 1
+          fi
+          echo "Image size check passed: ${SIZE_MB} MB < 20 MB budget."
+
+      - name: Scan container image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: greeter:${{ github.sha }}
+          format: table
+          exit-code: 1
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
+  ci-status:
+    name: CI Status Gate
+    runs-on: ubuntu-latest
+    needs: [test-app, lint-helm, validate-terraform, build-container]
+    if: always()
+    steps:
+      - name: Check all prerequisite jobs succeeded
+        run: |
+          if [ "${{ needs.test-app.result }}" != "success" ] || \
+             [ "${{ needs.lint-helm.result }}" != "success" ] || \
+             [ "${{ needs.validate-terraform.result }}" != "success" ] || \
+             [ "${{ needs.build-container.result }}" != "success" ]; then
+            echo "CI pipeline failed one or more required jobs."
+            exit 1
+          fi
+          echo "All CI pipeline checks passed successfully!"

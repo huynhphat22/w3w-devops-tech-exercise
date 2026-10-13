@@ -225,3 +225,44 @@ Extension B was prioritized because **you cannot manage what you cannot measure*
      2. **Fault Injection:** Injected HTTP failure requests via `GET /boom` (which deterministically returns HTTP 500).
      3. **Pending State:** Within 10 seconds, Prometheus observed an error rate of 37.4% (> 10%) and transitioned `GreeterHighHttp5xxErrorRate` to `PENDING`.
      4. **Firing State:** After 30 seconds of sustained error rate (`for: 30s`), Prometheus escalated the alert to `FIRING` state with full alert metadata, SLO labels, and runbook links.
+
+---
+
+## 8. Continuous Integration Pipeline Architecture (Extension A)
+
+### Prioritization & Value Rationale
+
+Extension A was prioritized to complete the delivery lifecycle:
+1. **Core Tasks:** Provided the image, multi-node cluster, packaging, and IaC deployment.
+2. **Extension D (Resilience):** Empirically proved zero-downtime survivability during node drains.
+3. **Extension B (Observability):** Provided runtime SLI/SLO metrics and alerting.
+4. **Extension A (CI):** Automates the verification gate, ensuring that broken code, invalid Helm values, unformatted Terraform, or vulnerable container images cannot be merged into `main`.
+
+### Decisions Made
+
+1. **Pipeline Topology: Parallel Fast-Feedback Matrix**
+   - **Choice:** Structured the pipeline into 4 focused jobs (`test-app`, `lint-helm`, `validate-terraform`, `build-container`) feeding into a final `ci-status` gate, rather than a monolithic sequential script.
+   - **Rationale:** 
+     - *Speed:* Application tests, Helm linting, and Terraform validation run concurrently in isolated runner environments. Total execution time is bounded by the slowest individual check (~45s) rather than their sum.
+     - *Actionable Failure Identification:* When a pull request fails, the GitHub Actions UI highlights immediately whether the failure was an unformatted Terraform file, a broken Go unit test, or an invalid Helm template, without forcing developers to dig through 500 lines of sequential console logs.
+     - *Concurrency Control:* Configured `concurrency.cancel-in-progress: true` so that pushing a new commit immediately cancels superseded workflow runs, conserving GitHub runner minutes.
+
+2. **Automated Quality & Security Gates**
+   - **Application Layer (`test-app`):** Runs `gofmt -l`, `go vet ./...`, and `go test -v -race -cover ./...`. Enabling the Go race detector (`-race`) ensures concurrent request handling in the HTTP server cannot cause silent data races.
+   - **Package Layer (`lint-helm`):** Runs `helm lint` and renders templates (`helm template`) against default and environment values to catch syntax and indentation errors before applying to clusters.
+   - **Infrastructure Layer (`validate-terraform`):** Runs `terraform fmt -check -diff`, `terraform init -backend=false`, and `terraform validate` to enforce uniform code styling and provider validation.
+   - **Container Security & Image Budget (`build-container`):**
+     - *Buildx Layer Caching:* Employs GitHub Actions cache backend (`type=gha,mode=max`) for accelerated Docker builds.
+     - *Vulnerability Scanning:* Scans the generated image using Aqua Security Trivy (`aquasecurity/trivy-action`) for `HIGH` and `CRITICAL` vulnerabilities with `exit-code: 1`.
+     - *Enforcing the Image Size Budget:* Includes an explicit automated assertion:
+       $$\text{Image Size} < 20\,\text{MB}$$
+       Because the minimal image is ~7.7 MB, this gate prevents regressions (e.g. someone inadvertently switching from `scratch` to a heavy multi-gigabyte Ubuntu base image).
+
+3. **Single Status Check for Branch Protection (`ci-status`)**
+   - **Choice:** Added a consolidated `ci-status` gate job requiring all predecessor jobs to succeed.
+   - **Rationale:** Configuring multiple granular job names in GitHub repository branch protection settings is brittle when jobs are renamed or added. A single aggregated gate job provides a clean, permanent target for required pull request checks.
+
+4. **What We'd Do Differently in Production**
+   - *OIDC-Based Registry Publishing:* In an enterprise AWS/GCP setup, the pipeline would authenticate via GitHub Actions OIDC (`aws-actions/configure-aws-credentials` / `google-github-actions/auth`) without long-lived static secrets, pushing images tagged with commit SHA and semantic version to AWS ECR or GitHub Container Registry (GHCR).
+   - *Supply Chain Security:* In production, we would sign image digests using Cosign (`sigstore/cosign`) and generate an in-toto Software Bill of Materials (SBOM) with Syft to fulfill SLSA Level 3 compliance.
+
