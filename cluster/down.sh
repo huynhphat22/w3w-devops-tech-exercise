@@ -10,7 +10,7 @@ if command -v k3d &> /dev/null && k3d cluster list | grep -q "^${CLUSTER_NAME}\b
 elif command -v kind &> /dev/null && kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
   kind delete cluster --name "${CLUSTER_NAME}"
 else
-  echo "Cluster '${CLUSTER_NAME}' not found."
+  echo "Cluster '${CLUSTER_NAME}' not found or neither CLI available."
 fi
 
 echo "=== Cluster destroyed ==="

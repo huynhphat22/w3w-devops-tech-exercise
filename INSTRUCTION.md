@@ -123,8 +123,13 @@ Prometheus discovers all application pods across `dev` and `prod` via Kubernetes
 ```powershell
 # Windows PowerShell:
 .\monitoring\check-targets.ps1
+```
+```bash
+# Linux / macOS / Git Bash:
+chmod +x ./monitoring/check-targets.sh
+./monitoring/check-targets.sh
 
-# Linux / macOS / curl:
+# or raw curl:
 curl -s -H "Host: prometheus.local" http://127.0.0.1:8088/api/v1/targets
 ```
 All application pods across `dev` and `prod` should report `health: "up"`.

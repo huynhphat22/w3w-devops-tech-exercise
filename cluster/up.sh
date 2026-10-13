@@ -32,8 +32,9 @@ elif command -v kind &> /dev/null; then
       --timeout=120s
   fi
   if docker image inspect greeter:test &> /dev/null; then
-    echo "Importing local image 'greeter:test' into ${CLUSTER_NAME}..."
-    kind load docker-image greeter:test --name "${CLUSTER_NAME}"
+    echo "Tagging and importing local image 'greeter:test' and GHCR image into ${CLUSTER_NAME}..."
+    docker tag greeter:test ghcr.io/huynhphat22/w3w-devops-tech-exercise:latest
+    kind load docker-image greeter:test ghcr.io/huynhphat22/w3w-devops-tech-exercise:latest --name "${CLUSTER_NAME}"
   fi
 else
   echo "Error: Neither 'k3d' nor 'kind' found in PATH." >&2
