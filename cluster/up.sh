@@ -45,6 +45,7 @@ kubectl wait --for=condition=Ready nodes --all --timeout=120s
 
 if command -v k3d &> /dev/null; then
   echo "Configuring Traefik Ingress Controller for High Availability (2 replicas)..."
+  kubectl wait --namespace kube-system --for=condition=complete job/helm-install-traefik --timeout=120s 2>/dev/null || true
   kubectl wait --namespace kube-system --for=condition=available deployment/traefik --timeout=120s
   kubectl scale deployment traefik -n kube-system --replicas=2
 fi

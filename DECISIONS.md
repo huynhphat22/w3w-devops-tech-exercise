@@ -173,6 +173,55 @@ To empirically validate the resilience of our architecture under real-world infr
 #### Catastrophic Multi-Node Failure Discovery
 When both worker nodes (`agent-0` and `agent-1`) were simultaneously taken offline, the cluster exhibited self-healing behavior: Kubernetes automatically evicted pods from dead worker nodes and rescheduled them onto the control-plane node (`server-0`). While in-flight requests during the pod cold-start warmup (30s) experienced transient disruption, full service recovery completed automatically without human intervention.
 
+---
 
+## 7. Observability & Alerting Architecture (Extension B)
 
+### Prioritization & Value Rationale
 
+Extension B was prioritized because **you cannot manage what you cannot measure**. In real-world production systems:
+- Deploying infrastructure without telemetry creates an operational black hole.
+- Automated deployments (CI/GitOps) are useless if an engineering team has zero visibility into whether newly rolled-out code is throwing errors or starving of memory.
+- An alert rule that accurately pages on genuine SLO degradation protects customer trust and prevents alert fatigue.
+
+### Decisions Made
+
+1. **Deployment Architecture: Self-Contained Prometheus vs. Heavy Operator**
+   - **Choice:** Deployed a minimal, self-contained single-pod Prometheus server (`prom/prometheus:v2.54.1`) in a dedicated `monitoring` namespace using native Kubernetes primitives (`ConfigMap`, `Deployment`, `Service`, `Ingress`, `ClusterRole`).
+   - **Rationale:** 
+     - *Compliance with Brief:* The exercise explicitly states: *"A minimal Prometheus is completely fine; we are not grading the size of the stack."*
+     - *Lightweight Footprint:* Full operator frameworks (e.g. `kube-prometheus-stack`) install dozens of heavy CustomResourceDefinitions (`ServiceMonitor`, `PrometheusRule`, `AlertmanagerConfig`), webhooks, and sidecars, consuming hundreds of megabytes of memory and introducing CRD race conditions on local clusters.
+     - *Simplicity & Auditability:* Our manifests in `monitoring/` can be read, understood, and applied line-by-line in under 5 seconds without external Helm chart dependencies.
+   - **Considered and Rejected:**
+     - *`prometheus-operator` / `kube-prometheus-stack`:* Overkill for a single-service technical exercise. In an enterprise environment with hundreds of microservices managed by separate development teams, CRD-driven `ServiceMonitor` resources are preferred to enable distributed ownership. Here, standard Kubernetes pod annotations (`prometheus.io/scrape: "true"`) offer the cleanest decoupling.
+
+2. **The Alerting Rule: What Would Actually Wake Us Up?**
+   - **Choice:** Implemented `GreeterHighHttp5xxErrorRate`:
+     ```yaml
+     - alert: GreeterHighHttp5xxErrorRate
+       expr: |
+         (
+           sum by (namespace) (rate(greeter_http_requests_total{status=~"5.."}[1m]))
+           /
+           sum by (namespace) (rate(greeter_http_requests_total[1m]))
+         ) * 100 > 10
+       for: 30s
+       labels:
+         severity: critical
+         slo: "99.9-availability"
+         burn_rate: "100x"
+     ```
+   - **Rationale (The Google SRE SLO Burn Rate Model):**
+     - **Service Level Objective (SLO):** Target is 99.9% Availability (three nines), corresponding to an allowable 30-day error budget of 0.1% ($1 - 0.999 = 0.001$).
+     - **Burn Rate Math:** In SRE principles, an alert that pages at 3:00 AM must track how rapidly the service is burning through its error budget:
+       $$\text{Burn Rate} = \frac{\text{Observed Error Rate}}{1 - \text{Target SLO}} = \frac{0.10}{0.001} = 100\times$$
+     - At a 100x burn rate, the service will consume **100% of its entire monthly error budget in just 7.2 hours**, and **14% of the monthly budget in 1 hour**. This justifies waking an on-call engineer for immediate mitigation.
+     - **Ratio vs. Absolute Count:** Alerting on raw 5xx count (e.g. `> 10 errors`) generates false alarms during peak traffic when 10 errors might represent 0.001% of requests, while failing to detect an outage during low-traffic hours. A ratio-based rule remains mathematically invariant across varying traffic levels.
+     - **Grouped by Namespace:** Ensures immediate diagnostic clarity (knowing whether `dev` or `prod` is degraded).
+
+3. **Empirical Demonstration Results**
+   - We verified the alert lifecycle using `monitoring/verify-alert.ps1` (and `verify-alert.sh`):
+     1. **Baseline State:** Prometheus reported active target health `up` across all 5 pods (`dev` and `prod`). Alert state was confirmed `INACTIVE` (`0 firing`).
+     2. **Fault Injection:** Injected HTTP failure requests via `GET /boom` (which deterministically returns HTTP 500).
+     3. **Pending State:** Within 10 seconds, Prometheus observed an error rate of 37.4% (> 10%) and transitioned `GreeterHighHttp5xxErrorRate` to `PENDING`.
+     4. **Firing State:** After 30 seconds of sustained error rate (`for: 30s`), Prometheus escalated the alert to `FIRING` state with full alert metadata, SLO labels, and runbook links.

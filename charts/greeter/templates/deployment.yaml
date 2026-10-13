@@ -23,6 +23,9 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.config.port }}"
+        prometheus.io/path: "/metrics"
     spec:
       # Sized to accommodate SHUTDOWN_DELAY_SECONDS (10s) + DRAIN_TIMEOUT_SECONDS (20s) + 15s buffer.
       terminationGracePeriodSeconds: 45

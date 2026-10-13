@@ -2,5 +2,5 @@ apiVersion: v2
 name: greeter
 description: A resilient, minimal Helm chart for the what3words greeter service
 type: application
-version: 0.1.0
+version: 0.2.0
 appVersion: "1.0.0"
