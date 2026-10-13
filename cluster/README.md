@@ -13,6 +13,8 @@ This directory contains the declarative configurations and automation scripts to
 * **Ingress / Load Balancer:**
   * Host port `8088` mapped to cluster Ingress load balancer on port `80` (avoids host port 80 conflicts with Windows HTTP.sys / IIS).
   * Host port `8443` mapped to cluster HTTPS Ingress on port `443`.
+* **Platform Observability (Extension B):**
+  * Automated pre-installation of Prometheus (`monitoring` namespace) on cluster stand-up, ready to discover and scrape application pods out-of-the-box.
 
 This topology guarantees that pods can be scheduled with pod anti-affinity across independent nodes to survive single-node failures (Core Task 3 & Extension D).
 

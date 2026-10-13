@@ -50,6 +50,14 @@ if command -v k3d &> /dev/null; then
   kubectl scale deployment traefik -n kube-system --replicas=2
 fi
 
+MONITORING_DIR="$(cd "${SCRIPT_DIR}/../monitoring" && pwd)"
+if [ -d "${MONITORING_DIR}" ]; then
+  echo "Installing Prometheus monitoring stack (Extension B)..."
+  kubectl apply -f "${MONITORING_DIR}/namespace.yaml"
+  kubectl apply -f "${MONITORING_DIR}/"
+  kubectl wait --namespace monitoring --for=condition=available deployment/prometheus --timeout=120s
+fi
+
 echo "=== Cluster Nodes ==="
 kubectl get nodes -o wide
 

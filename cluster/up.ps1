@@ -56,6 +56,14 @@ if (Get-Command k3d -ErrorAction SilentlyContinue) {
     kubectl scale deployment traefik -n kube-system --replicas=2
 }
 
+$MonitoringDir = Join-Path (Split-Path -Parent $ScriptDir) "monitoring"
+if (Test-Path $MonitoringDir) {
+    Write-Host "Installing Prometheus monitoring stack (Extension B)..." -ForegroundColor Cyan
+    kubectl apply -f (Join-Path $MonitoringDir "namespace.yaml")
+    kubectl apply -f "$MonitoringDir\"
+    kubectl wait --namespace monitoring --for=condition=available deployment/prometheus --timeout=120s
+}
+
 Write-Host "`n=== Cluster Nodes ===" -ForegroundColor Green
 kubectl get nodes -o wide
 
