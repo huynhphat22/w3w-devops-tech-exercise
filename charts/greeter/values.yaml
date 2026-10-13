@@ -9,9 +9,16 @@ greetingName: "Candidate"
 replicaCount: 2
 
 image:
-  repository: "greeter"
-  tag: "test"
+  # Primary image published by GitHub Actions CI workflow
+  repository: "ghcr.io/huynhphat22/w3w-devops-tech-exercise"
+  tag: "latest"
   pullPolicy: "IfNotPresent"
+
+  # Fallback configuration for offline or local developer builds
+  useLocal: false
+  local:
+    repository: "greeter"
+    tag: "test"
 
 # Operational configuration mapped to application environment variables.
 config:

@@ -18,8 +18,9 @@ if (Get-Command k3d -ErrorAction SilentlyContinue) {
     }
 
     if (docker images -q greeter:test) {
-        Write-Host "Importing local image 'greeter:test' into $ClusterName..." -ForegroundColor Cyan
-        k3d image import greeter:test -c $ClusterName
+        Write-Host "Tagging and importing local image 'greeter:test' and GHCR image into $ClusterName..." -ForegroundColor Cyan
+        docker tag greeter:test ghcr.io/huynhphat22/w3w-devops-tech-exercise:latest
+        k3d image import greeter:test ghcr.io/huynhphat22/w3w-devops-tech-exercise:latest -c $ClusterName
     }
 } elseif (Get-Command kind -ErrorAction SilentlyContinue) {
     Write-Host "k3d not detected; using kind to create cluster..." -ForegroundColor Green

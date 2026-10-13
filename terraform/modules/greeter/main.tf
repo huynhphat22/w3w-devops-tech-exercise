@@ -26,6 +26,7 @@ resource "helm_release" "greeter" {
         repository = var.image_repository
         tag        = var.image_tag
         pullPolicy = var.image_pull_policy
+        useLocal   = var.use_local_image
       }
       ingress = {
         enabled  = var.ingress_enabled

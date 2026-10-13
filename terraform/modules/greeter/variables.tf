@@ -28,13 +28,19 @@ variable "replica_count" {
 variable "image_repository" {
   description = "Container image repository"
   type        = string
-  default     = "greeter"
+  default     = "ghcr.io/huynhphat22/w3w-devops-tech-exercise"
 }
 
 variable "image_tag" {
   description = "Container image tag"
   type        = string
-  default     = "test"
+  default     = "latest"
+}
+
+variable "use_local_image" {
+  description = "Whether to use the local fallback image (greeter:test)"
+  type        = bool
+  default     = false
 }
 
 variable "image_pull_policy" {

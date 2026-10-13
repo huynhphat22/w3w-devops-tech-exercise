@@ -267,3 +267,11 @@ Extension A was prioritized to complete the delivery lifecycle:
    - *OIDC-Based Registry Publishing:* In an enterprise AWS/GCP setup, the pipeline would authenticate via GitHub Actions OIDC (`aws-actions/configure-aws-credentials` / `google-github-actions/auth`) without long-lived static secrets, pushing images tagged with commit SHA and semantic version to AWS ECR or GitHub Container Registry (GHCR).
    - *Supply Chain Security:* In production, we would sign image digests using Cosign (`sigstore/cosign`) and generate an in-toto Software Bill of Materials (SBOM) with Syft to fulfill SLSA Level 3 compliance.
 
+5. **Artifact Publishing & Dual-Layer Fallback Architecture**
+   - **Choice:** Published images directly to GitHub Container Registry (`ghcr.io/huynhphat22/w3w-devops-tech-exercise`) in the CI workflow, referenced it as the primary image in Helm (`values.yaml`), and implemented a dual-layer local fallback mechanism.
+   - **Rationale:** 
+     - *Closing the Delivery Loop:* Connecting the Helm packaging and Terraform environments directly to the artifact produced by CI makes the deployment pipeline truly end-to-end.
+     - *Dual-Layer Fallback:* To fulfill the exercise constraint ("everything runs locally without cloud dependencies"):
+       1. **Automatic Node Cache Layer (`pullPolicy: IfNotPresent`):** Cluster bootstrap scripts (`up.ps1` / `up.sh`) tag and sideload the locally built image under the GHCR repository name into k3d. When running offline, the Kubernetes kubelet detects the pre-warmed image in containerd and starts the pods immediately without contacting GHCR.
+       2. **Declarative Configuration Layer (`image.useLocal`):** Operators can set `image.useLocal: true` in Helm or `use_local_image = true` in Terraform (`variables.tf`) to explicitly route deployments to the local `greeter:test` image.
+

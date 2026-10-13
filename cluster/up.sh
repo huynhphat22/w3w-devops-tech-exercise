@@ -14,8 +14,9 @@ if command -v k3d &> /dev/null; then
     k3d cluster create --config "${SCRIPT_DIR}/k3d.yaml"
   fi
   if docker image inspect greeter:test &> /dev/null; then
-    echo "Importing local image 'greeter:test' into ${CLUSTER_NAME}..."
-    k3d image import greeter:test -c "${CLUSTER_NAME}"
+    echo "Tagging and importing local image 'greeter:test' and GHCR image into ${CLUSTER_NAME}..."
+    docker tag greeter:test ghcr.io/huynhphat22/w3w-devops-tech-exercise:latest
+    k3d image import greeter:test ghcr.io/huynhphat22/w3w-devops-tech-exercise:latest -c "${CLUSTER_NAME}"
   fi
 elif command -v kind &> /dev/null; then
   echo "k3d not detected; using kind to create cluster..."

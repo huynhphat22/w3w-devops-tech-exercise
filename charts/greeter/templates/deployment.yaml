@@ -47,9 +47,15 @@ spec:
               app.kubernetes.io/name: greeter
               app.kubernetes.io/instance: {{ .Release.Name }}
       {{- end }}
+      {{- $repo := .Values.image.repository -}}
+      {{- $tag := .Values.image.tag -}}
+      {{- if .Values.image.useLocal }}
+        {{- $repo = default "greeter" (and .Values.image.local .Values.image.local.repository) -}}
+        {{- $tag = default "test" (and .Values.image.local .Values.image.local.tag) -}}
+      {{- end }}
       containers:
         - name: greeter
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ $repo }}:{{ $tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             allowPrivilegeEscalation: false
