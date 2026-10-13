@@ -13,12 +13,16 @@ Write-Host "==========================================================" -Foregro
 
 # 1. Check Initial State
 Write-Host "`n[Step 1] Checking baseline alert state in Prometheus..." -ForegroundColor Yellow
+$targetNamespace = if ($TargetHost -like "prod*") { "prod" } else { "dev" }
 $initial = Invoke-RestMethod -Uri "http://127.0.0.1:8088/api/v1/alerts" -Headers @{Host="prometheus.local"}
-$activeAlerts = $initial.data.alerts | Where-Object { $_.labels.alertname -eq "GreeterHighHttp5xxErrorRate" }
-if ($activeAlerts) {
-    Write-Host "Alert already active: $($activeAlerts.state)" -ForegroundColor Yellow
+$activeAlerts = @($initial.data.alerts | Where-Object { 
+    $_.labels.alertname -eq "GreeterHighHttp5xxErrorRate" -and 
+    $_.labels.namespace -eq $targetNamespace 
+})
+if ($activeAlerts.Count -gt 0) {
+    Write-Host "Alert already active in namespace '$targetNamespace': $($activeAlerts[0].state)" -ForegroundColor Yellow
 } else {
-    Write-Host "Baseline confirmed: Alert 'GreeterHighHttp5xxErrorRate' is INACTIVE (0 firing)." -ForegroundColor Green
+    Write-Host "Baseline confirmed: Alert 'GreeterHighHttp5xxErrorRate' in namespace '$targetNamespace' is INACTIVE." -ForegroundColor Green
 }
 
 # 2. Trigger Outage via /boom
@@ -40,9 +44,13 @@ $fired = $false
 
 while ($stopwatch.Elapsed.TotalSeconds -lt $MaxWaitSeconds) {
     $alerts = Invoke-RestMethod -Uri "http://127.0.0.1:8088/api/v1/alerts" -Headers @{Host="prometheus.local"}
-    $alert = $alerts.data.alerts | Where-Object { $_.labels.alertname -eq "GreeterHighHttp5xxErrorRate" }
+    $matchingAlerts = @($alerts.data.alerts | Where-Object { 
+        $_.labels.alertname -eq "GreeterHighHttp5xxErrorRate" -and 
+        $_.labels.namespace -eq $targetNamespace 
+    })
     
-    if ($alert) {
+    if ($matchingAlerts.Count -gt 0) {
+        $alert = $matchingAlerts[0]
         $state = $alert.state
         $ns = $alert.labels.namespace
         $val = [double]$alert.value
