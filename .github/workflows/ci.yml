@@ -116,7 +116,7 @@ jobs:
           echo "Image size check passed: ${SIZE_MB} MB < 20 MB budget."
 
       - name: Scan container image for vulnerabilities (Trivy)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: greeter:${{ github.sha }}
           format: table
