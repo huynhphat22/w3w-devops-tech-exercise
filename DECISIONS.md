@@ -253,7 +253,8 @@ Extension A was prioritized to complete the delivery lifecycle:
    - **Infrastructure Layer (`validate-terraform`):** Runs `terraform fmt -check -diff`, `terraform init -backend=false`, and `terraform validate` to enforce uniform code styling and provider validation.
    - **Container Security & Image Budget (`build-container`):**
      - *Buildx Layer Caching:* Employs GitHub Actions cache backend (`type=gha,mode=max`) for accelerated Docker builds.
-     - *Vulnerability Scanning:* Scans the generated image using Aqua Security Trivy (`aquasecurity/trivy-action`) for `HIGH` and `CRITICAL` vulnerabilities with `exit-code: 1`.
+     - *Vulnerability Scanning & Artifact Reporting:* Scans the generated image using Aqua Security Trivy (`aquasecurity/trivy-action@v0.36.0`). The scan exports a full table report uploaded as a downloadable pipeline build artifact (`trivy-vulnerability-report`) and printed to runner logs.
+     - *Configurable Enforcement Policy:* The scan currently runs in advisory mode (`exit-code: 0`) to prevent blocking deployments on baseline CVEs during initial adoption. The failure gate is fully configurable via `TRIVY_EXIT_CODE` environment or repository variable (`vars.TRIVY_EXIT_CODE`), allowing zero-code transition to strict blocking (`exit-code: 1`) in the future.
      - *Enforcing the Image Size Budget:* Includes an explicit automated assertion:
        $$\text{Image Size} < 20\,\text{MB}$$
        Because the minimal image is ~7.7 MB, this gate prevents regressions (e.g. someone inadvertently switching from `scratch` to a heavy multi-gigabyte Ubuntu base image).
